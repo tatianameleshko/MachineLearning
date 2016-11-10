@@ -1,0 +1,87 @@
+---
+title: "Course Project Machine Learning"
+author: "Tatiana Meleshko"
+date: "November 9, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Task
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+##Getting and cleaning data
+
+Download files:
+```{r}
+fileUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(fileUrl,destfile = "/Users/tatianameleshko/Desktop/training.csv", method = "curl")
+training <- read.csv("/Users/tatianameleshko/Desktop/training.csv",na.strings=c(""," ","NA"))
+fileUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(fileUrl,destfile = "/Users/tatianameleshko/Desktop/testing.csv", method = "curl")
+testing <- read.csv("/Users/tatianameleshko/Desktop/testing.csv",na.strings=c(""," ","NA"))
+```
+For training dataset: find percentage of NA values,remove all the columns where are more than 20% NA values.
+Removing username, timestamps and window information.These columns are not related to the model building. Peforming the same operations on testing dataset.
+```{r}
+na_means<- colMeans(is.na(training))
+x<-which(na_means<0.8)
+training <- training[x]
+training <- subset(training,select = -c(user_name,raw_timestamp_part_1,raw_timestamp_part_2,cvtd_timestamp,new_window,num_window))
+dim(training)
+testing <- testing[x]
+testing <- subset(testing,select = -c(user_name,raw_timestamp_part_1,raw_timestamp_part_2,cvtd_timestamp,new_window,num_window))
+```
+
+## Cross-validation
+We create 3 folds and create 3 training and 3 testing subsets.Will be building models and testing accuracies on every fold.
+```{r }
+library(caret)
+set.seed(12345)
+folds <- createFolds(y=training$classe,k=3,list=TRUE,returnTrain=TRUE)
+training1 <- training[folds[[1]],]
+testing1 <- training[-folds[[1]],]
+training2 <- training[folds[[2]],]
+testing2 <- training[-folds[[2]],]
+training3 <- training[folds[[3]],]
+testing3 <- training[-folds[[3]],]
+```
+
+## Model building
+We will build models using follwing methods: tree, linear discriminant analysis and random forest. 
+Every model will be build 3 times (on every fold).
+```{r}
+library(randomForest)
+modelRPART1 <- train(classe~.,method="rpart",data=training1)
+modelRPART2 <- train(classe~.,method="rpart",data=training2)
+modelRPART3 <- train(classe~.,method="rpart",data=training3)
+modelLDA1 <- train(classe~.,method="lda",data=training1)
+modelLDA2 <- train(classe~.,method="lda",data=training2)
+modelLDA3 <- train(classe~.,method="lda",data=training3)
+modelRF1 <- randomForest(classe ~. , data=training1)
+modelRF2 <- randomForest(classe ~. , data=training2)
+modelRF3 <- randomForest(classe ~. , data=training3)
+```
+
+# Out of sample error
+Let's check confusion matrix and overall accuracy for every model:
+```{r}
+confusionMatrix(testing1$classe,predict(modelRPART1,newdata=testing1))$overall[["Accuracy"]]
+confusionMatrix(testing2$classe,predict(modelRPART2,newdata=testing2))$overall[["Accuracy"]]
+confusionMatrix(testing3$classe,predict(modelRPART3,newdata=testing3))$overall[["Accuracy"]]
+confusionMatrix(testing1$classe,predict(modelLDA1,newdata=testing1))$overall[["Accuracy"]]
+confusionMatrix(testing2$classe,predict(modelLDA2,newdata=testing2))$overall[["Accuracy"]]
+confusionMatrix(testing3$classe,predict(modelLDA3,newdata=testing3))$overall[["Accuracy"]]
+confusionMatrix(testing1$classe,predict(modelRF1,newdata=testing1))$overall[["Accuracy"]]
+confusionMatrix(testing2$classe,predict(modelRF2,newdata=testing2))$overall[["Accuracy"]]
+confusionMatrix(testing3$classe,predict(modelRF3,newdata=testing3))$overall[["Accuracy"]]
+```
+All three Random Fores models show 99%-100% accuracy on test sets. LDA models show 97-96% accuracy.
+Tree models show 66% accuracy.99%-100% looks like ovefitting so we are not going to use RF to predict testing dataset. We will use LDA1 model with highest accuracy of 97%.
+
+##Prediction
+```{r}
+predict(modelLDA3, newdata = testing)
+```
